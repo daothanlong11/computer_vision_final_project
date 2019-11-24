@@ -38,19 +38,16 @@ class app:
         self.video = video
         self.outputPath = outputPath
         self.frame1 = None
-        self.frame2 = None
+        #self.frame2 = None
         self.name = None
         self.path = outputPath
         self.thread1 = None
-        self.thread2 = None
         self.stopEvent = None
 
         
         # initialize the root window and image panel
         self.root = tk.Tk()
         self.panel1 = None
-        self.panel2 = None
-        self.panel3 = None
 
         # attendance info
         self.name_att = []
@@ -62,18 +59,8 @@ class app:
         self.time = datetime.datetime.now()
         date = self.time.strftime("%d-%m-%Y_07-00-00-AM")
         
-        
-
-
         # create a button, that when pressed, will take the current
 		# frame and save it to file
-        btn3 = tk.Button(self.root,text='submit',command=self.submit_face)
-        btn3.pack(side='bottom',fill='both',expand='yes',padx=10,pady=10)
-
-        btn1 = tk.Button(self.root,text='scan',command=self.scan_face)
-        btn1.pack(side='bottom',fill='both',expand='yes',padx=10,pady=10)
-        
-
         btn2 = tk.Button(self.root,text='start',command=self.start_app)
         btn2.pack(side='bottom',fill='both',expand='yes',padx=10,pady=10)
 
@@ -90,49 +77,18 @@ class app:
         lbl1.pack(side='bottom')
         entry2 = tk.Label(self.root, text=date)
         entry2.pack(side='bottom')
-        
-        
-    
+         
         # start a thread that constantly pools the video sensor for
 		# the most recently read frame
         self.stopEvent = threading.Event()
         self.thread1 = threading.Thread(target=self.videoLoop1,args=())
-        self.thread2 = threading.Thread(target=self.videoLoop2,args=())
-        
-
+             
         # set a callback to handle when the window is closed
         self.root.wm_title("Face Recognition System")
         self.root.wm_protocol("WM_DELETE_WINDOW", self.onClose)
 
     def start_app(self):
         self.thread1.start()
-
-    
-
-    def videoLoop2(self):
-        try:
-            while not self.stopEvent.is_set():
-
-                self.frame2 = self.video.read()
-                self.frame2 = imutils.resize(self.frame2,width=600)
-
-                image = cv2.cvtColor(self.frame2, cv2.COLOR_BGR2RGB)
-                image = Image.fromarray(image)
-                image = ImageTk.PhotoImage(image)
-
-                # if the panel is not None, we need to initialize it
-                if self.panel2 is None:
-                    self.panel2 = tk.Label(image=image)
-                    self.panel2.image = image
-                    self.panel2.pack(side='left',padx=10,pady=10)
-
-                # otherwise, simply update the panel
-                else:
-                    self.panel2.configure(image=image)
-                    self.panel2.image = image
-
-        except RuntimeError :
-            print("[INFO] caught a RuntimeError")
 
     def videoLoop1(self):
         try:
@@ -153,66 +109,91 @@ class app:
                 detector.setInput(imageBlob)
                 detections = detector.forward()
 
-                for i in range(0,detections.shape[2]):
-                    confidence = detections[0,0,i,2]
+                if (detections.shape[2]>0):
+                    for i in range(0,detections.shape[2]):
+                        confidence = detections[0,0,i,2]
 
-                    if (confidence > 0.7):
-                        # compute the (x, y)-coordinates of the bounding box for
-                        # the face
-                        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                        (startX, startY, endX, endY) = box.astype("int")
+                        if (confidence > 0.8):
+                            # compute the (x, y)-coordinates of the bounding box for
+                            # the face
+                            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                            (startX, startY, endX, endY) = box.astype("int")
 
-                        # extract the face ROI and grab the ROI dimensions
-                        face = self.frame1[startY:endY, startX:endX]
-                        (fH, fW) = face.shape[:2]
+                            # extract the face ROI and grab the ROI dimensions
+                            face = self.frame1[startY:endY, startX:endX]
+                            (fH, fW) = face.shape[:2]
 
-                        # ensure the face width and height are sufficiently large
-                        if fW < 20 or fH < 20:
-                            continue
+                            # ensure the face width and height are sufficiently large
+                            if fW < 20 or fH < 20:
+                                continue
 
-                        # construct a blob for the face ROI, then pass the blob
-                        # through our face embedding model to obtain the 128-d
-                        # quantification of the face
-                        faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
-                            
-                        # 128-d ouput
-                        embedder.setInput(faceBlob)
-                        vec = embedder.forward()
+                            # construct a blob for the face ROI, then pass the blob
+                            # through our face embedding model to obtain the 128-d
+                            # quantification of the face
+                            faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
+                                
+                            # 128-d ouput
+                            embedder.setInput(faceBlob)
+                            vec = embedder.forward()
 
-                        #perform classification 
-                        preds = recognizer.predict_proba(vec)[0]
-                        j = np.argmax(preds)
-                        proba = preds[j]
-                        name = le.classes_[j]
-                        # write name and time to csv file
-                        s = 0
+                            #perform classification 
+                            preds = recognizer.predict_proba(vec)[0]
+                            j = np.argmax(preds)
+                            proba = preds[j]
+                            name = le.classes_[j]
+                            # write name and time to csv file
+                            s = 0
 
-                        if len(self.name_att) == 0:
-                            attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
-                            self.name_att.append(name)
-                            self.date_att.append(attendance_time)
-                            self.status_att.append('late')
-                        else:
-
-                            for n in self.name_att:
-                                if name == n:
-                                    s = 1
-                            
-                            if s == 0:
+                            if len(self.name_att) == 0:
                                 attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
                                 self.name_att.append(name)
                                 self.date_att.append(attendance_time)
                                 self.status_att.append('late')
-        
-                        self.name = name
 
-                        # draw the bounding box of the face along with the
-                        # associated probability
-                        text = "{}: {:.2f}%".format(name, proba * 100)
-                        y = startY - 10 if startY - 10 > 10 else startY + 10
-                        cv2.rectangle(self.frame1, (startX, startY), (endX, endY),
-                            (0, 0, 255), 2)
-                        cv2.putText(self.frame1, text, (startX, y),
+                                ################## text2voice #######################
+                                from pygame import mixer
+                                import time
+                                
+                                n = name.split(" ")[-1]
+                                dst = project_path + "/sound/{}.wav".format(n)
+                                mixer.init()
+                                mixer.music.load(dst)
+                                mixer.music.play()
+
+                                ######################################################
+                            else:
+
+                                for n in self.name_att:
+                                    if name == n:
+                                        s = 1
+                                
+                                if s == 0:
+                                    attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
+                                    self.name_att.append(name)
+                                    self.date_att.append(attendance_time)
+                                    self.status_att.append('late')
+
+                                    ################## text2voice #######################
+                                    from pygame import mixer
+                                    import time
+                                    
+                                    n = name.split(" ")[-1]
+                                    dst = project_path + "/sound/{}.wav".format(n)
+                                    mixer.init()
+                                    mixer.music.load(dst)
+                                    mixer.music.play()
+
+                                    ######################################################
+            
+                            self.name = name
+
+                            # draw the bounding box of the face along with the
+                            # associated probability
+                            text = "{}: {:.2f}%".format(name.split(" ")[-1], proba * 100)
+                            y = startY - 10 if startY - 10 > 10 else startY + 10
+                            cv2.rectangle(self.frame1, (startX, startY), (endX, endY),
+                                (0, 0, 255), 2)
+                            cv2.putText(self.frame1, text, (startX, y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
 
                 image = cv2.cvtColor(self.frame1, cv2.COLOR_BGR2RGB)
@@ -233,13 +214,6 @@ class app:
             
         except RuntimeError:
             print("[INFO] caught a RuntimeError")   
-
-
-
-        
-
-    def scan_face(self):
-        self.thread2.start()
 
     def attendance_file(self):
         input_line = {'name':self.name_att,'date':self.date_att,'status':self.status_att}
@@ -277,26 +251,6 @@ class app:
         # Start Tk's event loop
         root.mainloop()
 
-
-        
-
-        
-
-    def submit_face(self):
-        self.name = self.entry_id1.get()
-        imagePaths = list(paths.list_images(self.path + "dataset/{}/".format(self.name)))
-        
-        
-        
-        if len(imagePaths) < 1:
-            cv2.imwrite(self.path+"dataset/{}/0.png".format(self.name),self.frame2.copy())
-            print("save new dataset success")
-        else:
-            cv2.imwrite(self.path+"dataset/{}/{}.png".format(self.name,len(imagePaths)),self.frame2.copy())
-            print("save new dataset success")
-
-        print("[INFO] saved {}".format(self.name))
-
     def onClose(self):
         # set the stop event, cleanup the camera, and allow the rest of
         # the quit process to continue
@@ -305,4 +259,3 @@ class app:
         self.video.stop()
         self.root.quit()
 
-    
