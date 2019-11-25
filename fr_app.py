@@ -189,11 +189,12 @@ class app:
                             (0, 0, 255), 2)
                         cv2.putText(self.frame1, text, (startX, y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+                    self.flag = False
 
                 image = cv2.cvtColor(self.frame1, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(image)
                 image = ImageTk.PhotoImage(image)
-                self.flag = False
+                
 
                 # if the panel is not None, we need to initialize it
                 if self.panel1 is None:
@@ -247,16 +248,19 @@ class app:
         root.mainloop()
 
     def speak(self):
-        
-        mixer.init()
-        while True:    
-            if (self.flag == True):
-                n = self.name.split(" ")[-1]
-                dst = project_path + "/sound/{}.wav".format(n)
-                mixer.music.load(dst)
-                mixer.music.play()
-            
-            print("0")
+        try:
+            mixer.init()
+            while not self.stopEvent.is_set():      
+                if (self.flag == True):
+                    n = self.name.split(" ")[-1]
+                    dst = project_path + "/sound/{}.wav".format(n)
+                    mixer.music.load(dst)
+                    mixer.music.play()
+                
+                print("0")
+
+        except RuntimeError:
+            print("[INFO] caught a RuntimeError") 
         
 
     def onClose(self):

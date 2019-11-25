@@ -4,7 +4,6 @@ from imutils.video import VideoStream
 import time
 import os
 import cv2
-from pygame import mixer
 
 project_path = os.path.dirname(os.path.realpath(__file__)) + "/"   #path of folfer face_recognition
 
