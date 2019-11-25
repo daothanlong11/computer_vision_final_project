@@ -147,7 +147,7 @@ class app:
                                 self.mssv_att.append(mssv)
                                 self.date_att.append(date)
 
-                        if (self.i%10 == 0):
+                        if (self.i%30 == 0):
                             self.name = self.entry_id1.get()
                             imagePaths = list(paths.list_images(self.path + "dataset/{}/".format(self.name)))           
                             if len(imagePaths) < 1:

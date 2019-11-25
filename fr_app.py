@@ -13,6 +13,7 @@ import pickle
 from imutils import paths
 import pandas as pd 
 from pygame import mixer
+from multiprocessing import Process
 
 project_path = os.path.dirname(os.path.realpath(__file__)) #path of folfer face_recognition
 
@@ -58,8 +59,7 @@ class app:
 
         # Time
         self.time = datetime.datetime.now()
-        date = self.time.strftime("%d-%m-%Y_07-00-00-AM")
-        
+
         # create a button, that when pressed, will take the current
 		# frame and save it to file
         btn2 = tk.Button(self.root,text='start',command=self.start_app)
@@ -69,21 +69,19 @@ class app:
         btn4.pack(side='bottom',fill='both',expand='yes',padx=10,pady=10)
 
         # create text input for name and date
-        lbl1 = tk.Label(self.root, text="Name")
+        lbl1 = tk.Label(self.root, text="Attendace Time")
         lbl1.pack(side='bottom')
         self.entry_id1 = StringVar()
         entry1 = tk.Entry(self.root, textvariable=self.entry_id1,justify='center')
         entry1.pack(side='bottom',expand='yes',padx=10,pady=10)
-        lbl1 = tk.Label(self.root, text="Attendance Time")
-        lbl1.pack(side='bottom')
-        entry2 = tk.Label(self.root, text=date)
-        entry2.pack(side='bottom')
+        
          
         # start a thread that constantly pools the video sensor for
 		# the most recently read frame
         self.stopEvent = threading.Event()
         self.thread1 = threading.Thread(target=self.videoLoop1,args=())
         self.thread2 = threading.Thread(target=self.speak,args=())
+        #self.process1 = Process(target=speak, args=())
              
         # set a callback to handle when the window is closed
         self.root.wm_title("Face Recognition System")
@@ -92,6 +90,7 @@ class app:
     def start_app(self):
         self.thread1.start()
         self.thread2.start()
+        
 
     def videoLoop1(self):
         try:
@@ -149,10 +148,16 @@ class app:
                         s = 0
 
                         if len(self.name_att) == 0:
-                            attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
+                            attendance_time = self.time.strftime("%d-%m-%Y_%H:%M:%S")
+                            date1 = attendance_time.split("_")[-1]
+                            date2 = self.entry_id1.get()
+                            if (date1 >= date2):
+                                self.status_att.append('late')
+                            else:
+                                self.status_att.append('on time')
                             self.name_att.append(name)
                             self.date_att.append(attendance_time)
-                            self.status_att.append('late')
+                            
                             self.flag = True
                             
                             
@@ -163,10 +168,16 @@ class app:
                                     s = 1
                             
                             if s == 0:
-                                attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
+                                attendance_time = self.time.strftime("%d-%m-%Y_%H:%M:%S")
+                                date1 = attendance_time.split("_")[-1]
+                                date2 = self.entry_id1.get()
+                                if (date1 >= date2):
+                                    self.status_att.append('late')
+                                else:
+                                    self.status_att.append('on time')
                                 self.name_att.append(name)
                                 self.date_att.append(attendance_time)
-                                self.status_att.append('late')
+                                
                                 self.flag = True
                                 
                                 
@@ -182,6 +193,7 @@ class app:
                 image = cv2.cvtColor(self.frame1, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(image)
                 image = ImageTk.PhotoImage(image)
+                self.flag = False
 
                 # if the panel is not None, we need to initialize it
                 if self.panel1 is None:
@@ -235,17 +247,17 @@ class app:
         root.mainloop()
 
     def speak(self):
-        try:
-            mixer.init()
-            while not self.stopEvent.is_set():    
-                if (self.flag == True):
-                    n = self.name.split(" ")[-1]
-                    dst = project_path + "/sound/{}.wav".format(n)
-                    mixer.music.load(dst)
-                    mixer.music.play()
-                    self.flag = False
-        except RuntimeError:
-            print("[INFO] caught a RuntimeError") 
+        
+        mixer.init()
+        while True:    
+            if (self.flag == True):
+                n = self.name.split(" ")[-1]
+                dst = project_path + "/sound/{}.wav".format(n)
+                mixer.music.load(dst)
+                mixer.music.play()
+            
+            print("0")
+        
 
     def onClose(self):
         # set the stop event, cleanup the camera, and allow the rest of
