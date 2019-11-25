@@ -12,6 +12,7 @@ import numpy as np
 import pickle
 from imutils import paths
 import pandas as pd 
+from pygame import mixer
 
 project_path = os.path.dirname(os.path.realpath(__file__)) #path of folfer face_recognition
 
@@ -43,7 +44,7 @@ class app:
         self.path = outputPath
         self.thread1 = None
         self.stopEvent = None
-
+        self.flag = False
         
         # initialize the root window and image panel
         self.root = tk.Tk()
@@ -82,6 +83,7 @@ class app:
 		# the most recently read frame
         self.stopEvent = threading.Event()
         self.thread1 = threading.Thread(target=self.videoLoop1,args=())
+        self.thread2 = threading.Thread(target=self.speak,args=())
              
         # set a callback to handle when the window is closed
         self.root.wm_title("Face Recognition System")
@@ -89,6 +91,7 @@ class app:
 
     def start_app(self):
         self.thread1.start()
+        self.thread2.start()
 
     def videoLoop1(self):
         try:
@@ -109,92 +112,72 @@ class app:
                 detector.setInput(imageBlob)
                 detections = detector.forward()
 
-                if (detections.shape[2]>0):
-                    for i in range(0,detections.shape[2]):
-                        confidence = detections[0,0,i,2]
+                
+                for i in range(0,detections.shape[2]):
+                    confidence = detections[0,0,i,2]
 
-                        if (confidence > 0.8):
-                            # compute the (x, y)-coordinates of the bounding box for
-                            # the face
-                            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                            (startX, startY, endX, endY) = box.astype("int")
+                    if (confidence > 0.7):
+                        # compute the (x, y)-coordinates of the bounding box for
+                        # the face
+                        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                        (startX, startY, endX, endY) = box.astype("int")
 
-                            # extract the face ROI and grab the ROI dimensions
-                            face = self.frame1[startY:endY, startX:endX]
-                            (fH, fW) = face.shape[:2]
+                        # extract the face ROI and grab the ROI dimensions
+                        face = self.frame1[startY:endY, startX:endX]
+                        (fH, fW) = face.shape[:2]
 
-                            # ensure the face width and height are sufficiently large
-                            if fW < 20 or fH < 20:
-                                continue
+                        # ensure the face width and height are sufficiently large
+                        if fW < 20 or fH < 20:
+                            continue
 
-                            # construct a blob for the face ROI, then pass the blob
-                            # through our face embedding model to obtain the 128-d
-                            # quantification of the face
-                            faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
-                                
-                            # 128-d ouput
-                            embedder.setInput(faceBlob)
-                            vec = embedder.forward()
+                        # construct a blob for the face ROI, then pass the blob
+                        # through our face embedding model to obtain the 128-d
+                        # quantification of the face
+                        faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
+                            
+                        # 128-d ouput
+                        embedder.setInput(faceBlob)
+                        vec = embedder.forward()
 
-                            #perform classification 
-                            preds = recognizer.predict_proba(vec)[0]
-                            j = np.argmax(preds)
-                            proba = preds[j]
-                            name = le.classes_[j]
-                            # write name and time to csv file
-                            s = 0
+                        #perform classification 
+                        preds = recognizer.predict_proba(vec)[0]
+                        j = np.argmax(preds)
+                        proba = preds[j]
+                        name = le.classes_[j]
+                        self.name = name
+                        # write name and time to csv file
+                        s = 0
 
-                            if len(self.name_att) == 0:
+                        if len(self.name_att) == 0:
+                            attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
+                            self.name_att.append(name)
+                            self.date_att.append(attendance_time)
+                            self.status_att.append('late')
+                            self.flag = True
+                            
+                            
+                        else:
+
+                            for n in self.name_att:
+                                if name == n:
+                                    s = 1
+                            
+                            if s == 0:
                                 attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
                                 self.name_att.append(name)
                                 self.date_att.append(attendance_time)
                                 self.status_att.append('late')
-
-                                ################## text2voice #######################
-                                from pygame import mixer
-                                import time
+                                self.flag = True
                                 
-                                n = name.split(" ")[-1]
-                                dst = project_path + "/sound/{}.wav".format(n)
-                                mixer.init()
-                                mixer.music.load(dst)
-                                mixer.music.play()
-
-                                ######################################################
-                            else:
-
-                                for n in self.name_att:
-                                    if name == n:
-                                        s = 1
                                 
-                                if s == 0:
-                                    attendance_time = self.time.strftime("%d-%m-%Y_%H-%M-%S")
-                                    self.name_att.append(name)
-                                    self.date_att.append(attendance_time)
-                                    self.status_att.append('late')
-
-                                    ################## text2voice #######################
-                                    from pygame import mixer
-                                    import time
-                                    
-                                    n = name.split(" ")[-1]
-                                    dst = project_path + "/sound/{}.wav".format(n)
-                                    mixer.init()
-                                    mixer.music.load(dst)
-                                    mixer.music.play()
-
-                                    ######################################################
-            
-                            self.name = name
-
-                            # draw the bounding box of the face along with the
-                            # associated probability
-                            text = "{}: {:.2f}%".format(name.split(" ")[-1], proba * 100)
-                            y = startY - 10 if startY - 10 > 10 else startY + 10
-                            cv2.rectangle(self.frame1, (startX, startY), (endX, endY),
-                                (0, 0, 255), 2)
-                            cv2.putText(self.frame1, text, (startX, y),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+                        # draw the bounding box of the face along with the
+                        # associated probability
+                        text = "{}: {:.2f}%".format(name.split(" ")[-1], proba * 100)
+                        y = startY - 10 if startY - 10 > 10 else startY + 10
+                        cv2.rectangle(self.frame1, (startX, startY), (endX, endY),
+                            (0, 0, 255), 2)
+                        cv2.putText(self.frame1, text, (startX, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
 
                 image = cv2.cvtColor(self.frame1, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(image)
@@ -211,7 +194,7 @@ class app:
                 else:
                     self.panel1.configure(image=image)
                     self.panel1.image = image
-            
+        
         except RuntimeError:
             print("[INFO] caught a RuntimeError")   
 
@@ -250,6 +233,19 @@ class app:
 
         # Start Tk's event loop
         root.mainloop()
+
+    def speak(self):
+        try:
+            mixer.init()
+            while not self.stopEvent.is_set():    
+                if (self.flag == True):
+                    n = self.name.split(" ")[-1]
+                    dst = project_path + "/sound/{}.wav".format(n)
+                    mixer.music.load(dst)
+                    mixer.music.play()
+                    self.flag = False
+        except RuntimeError:
+            print("[INFO] caught a RuntimeError") 
 
     def onClose(self):
         # set the stop event, cleanup the camera, and allow the rest of
